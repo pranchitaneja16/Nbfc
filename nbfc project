@@ -1,0 +1,98 @@
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.select.Elements;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+public class NBFCWebsiteFinder {
+
+    public static void main(String[] args) {
+        String inputFilePath = "nbfc_data.xlsx";
+        String outputFilePath = "nbfc_with_websites.xlsx";
+
+        try {
+            // Read data from Excel
+            List<String[]> data = readExcel(inputFilePath);
+            List<String[]> updatedData = new ArrayList<>();
+
+for (String[] row : data) {
+                String nbfcName = row[1]; // Assuming NBFC Name is the second column
+                String website = findOfficialWebsite(nbfcName);
+                if (website == null) website = "";
+                String[] updatedRow = new String[row.length + 1];
+                System.arraycopy(row, 0, updatedRow, 0, row.length);
+                updatedRow[row.length] = website;
+                updatedData.add(updatedRow);
+            }
+
+            // Write updated data to new Excel file
+            writeExcel(outputFilePath, updatedData);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+private static List<String[]> readExcel(String filePath) throws IOException {
+        List<String[]> data = new ArrayList<>();
+        try (FileInputStream fis = new FileInputStream(new File(filePath));
+             Workbook workbook = new XSSFWorkbook(fis)) {
+            Sheet sheet = workbook.getSheetAt(0);
+            for (Row row : sheet) {
+                int lastCellNum = row.getLastCellNum();
+                String[] rowData = new String[lastCellNum];
+                for (int i = 0; i < lastCellNum; i++) {
+                    Cell cell = row.getCell(i);
+                    rowData[i] = cell != null ? cell.toString() : "";
+                }
+                data.add(rowData);
+            }
+        }
+        return data;
+    }
+
+    private static String findOfficialWebsite(String nbfcName) {
+        String query = nbfcName + " official site";
+        try {
+            Document doc = Jsoup.connect("https://www.google.com/search?q=" + query)
+                                .userAgent("Mozilla/5.0")
+                                .get();
+            Elements results = doc.select("a[href]");
+            for (org.jsoup.nodes.Element result : results) {
+                String href = result.attr("href");
+                if (href.startsWith("http")) {
+                    return href;
+                }
+            }
+    } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    private static void writeExcel(String filePath, List<String[]> data) throws IOException {
+        Workbook workbook = new XSSFWorkbook();
+        Sheet sheet = workbook.createSheet("NBFC Data");
+
+        for (int i = 0; i < data.size(); i++) {
+            Row row = sheet.createRow(i);
+            String[] rowData = data.get(i);
+            for (int j = 0; j < rowData.length; j++) {
+                Cell cell = row.createCell(j);
+                cell.setCellValue(rowData[j]);
+            }
+        }
+
+        try (FileOutputStream fos = new FileOutputStream(filePath)) {
+            workbook.write(fos);
+        } finally {
+            workbook.close();
+        }
+    }
+}
